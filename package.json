@@ -1,0 +1,29 @@
+{
+  "name": "cmdcs",
+  "version": "0.1.0",
+  "description": "Run Command Code inside GitHub Codespaces from any machine (Windows, macOS, Linux)",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "cmdcs": "./bin/cmdcs.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "codespaces",
+    "github-codespaces",
+    "remote-development",
+    "command-code",
+    "cli"
+  ],
+  "files": [
+    "bin",
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test \"tests/*.test.mjs\"",
+    "doctor": "node ./bin/cmdcs.mjs doctor"
+  }
+}
