@@ -236,6 +236,12 @@ overlay          32G   11G   19G  37% /
 | `/tmp` | 44 GB total, **39 GB free** — a separate, larger volume |
 | RAM | 7.8 GB (1.2 GB used at idle, 6.5 GB available) |
 | CPU | 2 cores |
+| Files (`/`, `/workspaces`) | 2,097,152 inodes total, **1,774,172 free** |
+| Files (`/tmp`) | 2,949,120 inodes total, **2,944,955 free** |
+
+So "how many files" has a real answer: about **1.77 million more files** before the inode table
+runs out. In practice you hit the 19 GB byte limit long before the inode limit — a million small
+source files is far less of a constraint than the total size of what you check out.
 
 Node `v24.20.0` and npm `11.19.0` come with the image, so the CLI installs with no setup:
 `npm install -g command-code` then `chmod +x` nothing — it just works.
