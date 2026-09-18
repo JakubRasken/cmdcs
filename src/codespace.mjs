@@ -1,4 +1,4 @@
-import { CMDC_BIN, REMOTE_BOOTSTRAP } from './env.mjs';
+import { CMDC_NAME, REMOTE_BOOTSTRAP } from './env.mjs';
 import { run, runInteractive } from './proc.mjs';
 import { isReady, startCodespace } from './gh.mjs';
 
@@ -64,7 +64,7 @@ export async function execRemoteChecked(codespace, command, options = {}) {
 // Opens the remote Command Code TUI. stdio is inherited so the remote CLI owns
 // the terminal directly - that is what keeps the TUI alive and correctly sized.
 export async function openRemoteTui(codespace, { cwd, args = [] } = {}) {
-  const cli = [CMDC_BIN, ...args.map(shellQuote)].join(' ');
+  const cli = [CMDC_NAME, ...args.map(shellQuote)].join(' ');
   const remote = buildRemoteCommand(cli, { cwd });
   return runInteractive('gh', ['codespace', 'ssh', '-c', codespace.name, '--', remote]);
 }

@@ -175,6 +175,42 @@ and `~/.commandcode/providers.json` references it:
 so the file is safe in a dotfiles repo. Run with `--local-only` (`CMD_LOCAL_ONLY=1`) to send
 nothing through Command Code's servers.
 
+## What a codespace actually gives you
+
+Measured on a throwaway `basicLinux32gb` codespace (2 cores), not taken from docs:
+
+```
+Filesystem      Size  Used Avail Use% Mounted on
+overlay          32G   11G   19G  37% /
+/dev/loop4       32G   11G   19G  37% /workspaces
+/dev/sdb1        44G  3.3G   39G   8% /tmp
+```
+
+| Resource | Value |
+| --- | --- |
+| `/` and `/workspaces` | 32 GB total, **19 GB free** on a fresh container |
+| `/tmp` | 44 GB total, **39 GB free** — a separate, larger volume |
+| RAM | 7.8 GB (1.2 GB used at idle, 6.5 GB available) |
+| CPU | 2 cores |
+
+Node `v24.20.0` and npm `11.19.0` come with the image, so the CLI installs with no setup:
+`npm install -g command-code` then `chmod +x` nothing — it just works.
+
+That 19 GB is the working budget for the repo plus every dependency you install. If you need
+more, `-m` picks a bigger machine type (the storage tier grows with the machine class).
+
+## Known quirks found while building this
+
+Two real bugs that only show up on Windows against a Linux codespace:
+
+- **`gh codespace cp` cannot write to the remote on Windows.** It hands the remote path to
+  `scp.exe` with literal single quotes embedded, so the remote reports
+  `dest open "'.commandcode/auth.json'": No such file or directory`. Credentials are transferred
+  as base64 over the SSH channel instead.
+- **`gh codespace create` fails without `-m`.** Without a machine type it tries to prompt, which
+  fails non-interactively: `error getting machine type: error getting machine: no terminal`.
+  A default is always passed.
+
 ## Auto-start
 
 A stopped codespace is started automatically and polled until its SSH daemon is reachable

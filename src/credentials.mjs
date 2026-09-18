@@ -1,9 +1,8 @@
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { REMOTE_BOOTSTRAP } from './env.mjs';
-import { execRemote } from './codespace.mjs';
-import { run } from './proc.mjs';
+import { execRemote, shellQuote } from './codespace.mjs';
 
 // The CLI keeps its account token in ~/.commandcode/auth.json. A codespace has
 // none, and `cmdc login` cannot complete there: it runs an OAuth callback server
@@ -51,23 +50,25 @@ export async function copyAuthToRemote(codespace, { quiet = false } = {}) {
     if (!quiet) process.stderr.write(`${message}\n`);
   };
 
-  await execRemote(codespace, `${REMOTE_BOOTSTRAP}; mkdir -p "$HOME/.commandcode" && chmod 700 "$HOME/.commandcode"`);
+  // base64 over the SSH channel, not `gh codespace cp`. gh cp hands the remote
+  // path to scp with literal single quotes on Windows ("dest open
+  // \"'.commandcode/auth.json'\""), which the remote shell cannot resolve.
+  // base64 also survives arbitrary bytes without any scp quoting rules.
+  const payload = readFileSync(source).toString('base64');
+  const script = [
+    'set -e',
+    'umask 077',
+    'mkdir -p "$HOME/.commandcode"',
+    'chmod 700 "$HOME/.commandcode"',
+    `printf '%s' ${shellQuote(payload)} | base64 -d > "$HOME/.commandcode/auth.json"`,
+    'chmod 600 "$HOME/.commandcode/auth.json"',
+  ].join('\n');
 
-  const copy = await run('gh', [
-    'codespace',
-    'cp',
-    '-c',
-    codespace.name,
-    source,
-    'remote:.commandcode/auth.json',
-  ]);
-
-  if (copy.code !== 0) {
-    throw new Error(`Could not copy credentials: ${(copy.stderr || copy.stdout).trim()}`);
+  const result = await execRemote(codespace, `bash <<'CMDCS_EOF'\n${script}\nCMDCS_EOF`);
+  if (result.code !== 0) {
+    throw new Error(`Could not copy credentials: ${(result.stderr || result.stdout).trim()}`);
   }
 
-  // gh cp does not carry the file mode across, and this file holds a live token.
-  await execRemote(codespace, `${REMOTE_BOOTSTRAP}; chmod 600 "${REMOTE_AUTH}"`);
   notice(`Synced Command Code credentials into ${codespace.name}`);
 }
 

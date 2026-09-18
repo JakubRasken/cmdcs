@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { parseCodespaces, isReady, isStopped } from '../src/gh.mjs';
-import { parseRemoteProbe, probeRemote, REMOTE_BOOTSTRAP, CMDC_BIN, nodeIsSupported, nodeMajor, remoteCmdcPath } from '../src/env.mjs';
+import { parseRemoteProbe, probeRemote, REMOTE_BOOTSTRAP, CMDC_BIN, CMDC_NAME, nodeIsSupported, nodeMajor, remoteCmdcPath } from '../src/env.mjs';
 import { buildRemoteCommand, shellQuote } from '../src/codespace.mjs';
 import { quoteForCmdShim, isWindows } from '../src/proc.mjs';
 
@@ -61,11 +61,22 @@ test('probe tolerates shell noise and a missing node', () => {
   assert.equal(parsed.cmdc, null);
 });
 
-test('cmdc is the only CLI name probed, on every platform', () => {
+test('the remote probe always asks for the portable name, never the local one', () => {
   const probe = probeRemote();
-  assert.ok(probe.includes(`command -v ${CMDC_BIN}`));
+
+  // A Windows client driving a Linux codespace must still probe for `cmdc`.
+  // Using the local name here asked the codespace for `cmdc.cmd` and reported
+  // "not installed" for a perfectly good install.
+  assert.ok(probe.includes(`command -v ${CMDC_NAME}`));
+  assert.ok(!probe.includes('command -v cmdc.cmd'));
   assert.ok(!/\bcommand -v cmd\b/.test(probe));
   assert.ok(!probe.includes('commandcode'));
+});
+
+test('the local binary name is platform-specific', () => {
+  const expected = isWindows ? 'cmdc.cmd' : 'cmdc';
+  assert.equal(CMDC_BIN, expected);
+  assert.equal(CMDC_NAME, 'cmdc');
 });
 
 test('remote bootstrap sources nvm, fnm and common bin dirs', () => {
@@ -74,10 +85,11 @@ test('remote bootstrap sources nvm, fnm and common bin dirs', () => {
   assert.match(REMOTE_BOOTSTRAP, /\.local\/bin/);
 });
 
-test('remote bootstrap resolves the global npm prefix', () => {
+test('remote bootstrap resolves the global npm prefix with a devcontainer fallback', () => {
   assert.match(REMOTE_BOOTSTRAP, /npm prefix -g/);
-  assert.match(remoteCmdcPath(), new RegExp(`npm prefix -g`));
-  assert.ok(remoteCmdcPath().endsWith(`/bin/${CMDC_BIN}"`));
+  assert.match(REMOTE_BOOTSTRAP, /usr\/local\/share\/nvm\/current\/bin/);
+  assert.match(remoteCmdcPath(), /npm prefix -g/);
+  assert.ok(remoteCmdcPath().endsWith(`/bin/${CMDC_NAME}"`));
 });
 
 test('node >= 22 is required, below that is rejected', () => {

@@ -1,6 +1,9 @@
 import { run, runChecked, CommandError } from './proc.mjs';
 
-const LIST_FIELDS = 'name,displayName,repository,state,gitStatus,machine,devcontainerPath,lastUsedAt';
+// Field names must match `gh codespace list --json` exactly; gh rejects unknown
+// ones outright rather than ignoring them. Valid: createdAt, displayName,
+// gitStatus, lastUsedAt, machineName, name, owner, repository, state, vscsTarget.
+const LIST_FIELDS = 'name,displayName,repository,state,machineName,gitStatus,lastUsedAt,createdAt';
 
 export const SCOPE_HINT = 'gh auth refresh -h github.com -s codespace';
 
@@ -45,8 +48,9 @@ export function parseCodespaces(stdout) {
       displayName: String(entry.displayName ?? entry.name ?? ''),
       repository: String(entry.repository ?? ''),
       state: String(entry.state ?? 'Unknown'),
-      machine: String(entry.machine ?? ''),
+      machine: String(entry.machineName ?? ''),
       lastUsedAt: entry.lastUsedAt ?? null,
+      createdAt: entry.createdAt ?? null,
       gitStatus: entry.gitStatus ?? null,
     }))
     .filter(entry => entry.name.length > 0);
@@ -111,9 +115,21 @@ export async function deleteCodespace(name) {
   return runChecked('gh', ['codespace', 'delete', '-c', name, '--force']);
 }
 
+// gh prompts for a machine type when one is not given, and that prompt fails
+// without a terminal ("error getting machine type: error getting machine: no
+// terminal"), so a default is always sent for non-interactive runs.
+export const DEFAULT_MACHINE = 'basicLinux32gb';
+
 // Idle timeout and retention are always set explicitly: a throwaway codespace
 // that nobody remembers to delete should still expire on its own.
-export async function createCodespace({ repo, machine, branch, displayName, idleTimeout = '30m', retentionPeriod = '24h' } = {}) {
+export async function createCodespace({
+  repo,
+  machine = DEFAULT_MACHINE,
+  branch,
+  displayName,
+  idleTimeout = '30m',
+  retentionPeriod = '24h',
+} = {}) {
   const args = ['codespace', 'create', '--repo', repo, '--idle-timeout', idleTimeout, '--retention-period', retentionPeriod];
   if (machine) args.push('--machine', machine);
   if (branch) args.push('--branch', branch);

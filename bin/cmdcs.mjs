@@ -44,7 +44,7 @@ OPTIONS
 
 CREATE OPTIONS
   -R, --repo <owner/name>  Repository to host the codespace (required)
-  -m, --machine <type>     Hardware spec, e.g. basicLinux32gb (default: repo default)
+  -m, --machine <type>     Hardware spec (default: basicLinux32gb)
   -b, --branch <branch>    Branch to check out
       --idle <duration>    Stop after inactivity (default 30m)
       --retention <dur>    Delete this long after shutdown (default 24h)

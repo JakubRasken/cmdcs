@@ -3,7 +3,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { isWindows, run, runChecked, runNpm } from './proc.mjs';
 
-export const CMDC_BIN = isWindows ? 'cmdc.cmd' : 'cmdc';
+export const CMDC_NAME = 'cmdc';
 
 // The command-code package declares engines.node >= 22, so a codespace on an
 // older LTS cannot run the CLI even though `cmdc` installs fine.
@@ -12,6 +12,11 @@ export const MIN_NODE_MAJOR = 22;
 // The npm package is `command-code` but all four of its binary aliases
 // (cmd, cmdc, command-code, commandcode) resolve to the same dist/index.mjs.
 // `cmd` is cmd.exe on Windows, so `cmdc` is the one name used everywhere here.
+// Only the LOCAL lookup is platform-specific. Codespaces are Linux, so a run
+// on Windows must still ask the remote for `cmdc` - asking for `cmdc.cmd`
+// reports "not installed" for a perfectly good install.
+export const CMDC_BIN = isWindows ? `${CMDC_NAME}.cmd` : CMDC_NAME;
+
 const CMDC_DIRS = isWindows
   ? [join(process.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming'), 'npm')]
   : ['/usr/local/bin', '/opt/homebrew/bin', join(homedir(), '.local', 'bin'), join(homedir(), '.npm-global', 'bin')];
@@ -25,17 +30,20 @@ export function findCmdc() {
 }
 
 // Login shells on macOS start from a bare PATH, so node/nvm/brew must be
-// re-sourced before the CLI script can run.
+// re-sourced before the CLI script can run. The npm-global bin dir is resolved
+// last: `npm prefix -g` needs npm itself to be on PATH already, and the
+// devcontainer image keeps both under /usr/local/share/nvm/current/bin.
 export const REMOTE_BOOTSTRAP = [
-  'export NVM_DIR="$HOME/.nvm"',
+  'export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"',
   '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" >/dev/null 2>&1',
+  '[ -s /usr/local/share/nvm/nvm.sh ] && . /usr/local/share/nvm/nvm.sh >/dev/null 2>&1',
   'command -v fnm >/dev/null 2>&1 && eval "$(fnm env --shell bash)" 2>/dev/null',
-  'export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"',
+  'export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:/usr/local/bin:/opt/homebrew/bin:/usr/local/share/nvm/current/bin:$PATH"',
   'NPM_PREFIX="$(npm prefix -g 2>/dev/null)"; [ -n "$NPM_PREFIX" ] && export PATH="$NPM_PREFIX/bin:$PATH"',
 ].join('; ');
 
 export function probeRemote() {
-  return `${REMOTE_BOOTSTRAP}; node -v 2>/dev/null; npm -v 2>/dev/null; command -v ${CMDC_BIN} || echo none`;
+  return `${REMOTE_BOOTSTRAP}; node -v 2>/dev/null; npm -v 2>/dev/null; command -v ${CMDC_NAME} || echo none`;
 }
 
 export function parseRemoteProbe(stdout) {
@@ -66,7 +74,7 @@ export function nodeIsSupported(version) {
 // an interactive login shell but NOT for the non-interactive command SSH runs
 // without a tty. Resolving the prefix keeps the CLI reachable either way.
 export function remoteCmdcPath() {
-  return `"$(npm prefix -g 2>/dev/null)/bin/${CMDC_BIN}"`;
+  return `"$(npm prefix -g 2>/dev/null)/bin/${CMDC_NAME}"`;
 }
 
 export async function ghVersion() {
