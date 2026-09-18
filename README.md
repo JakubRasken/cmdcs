@@ -175,6 +175,50 @@ and `~/.commandcode/providers.json` references it:
 so the file is safe in a dotfiles repo. Run with `--local-only` (`CMD_LOCAL_ONLY=1`) to send
 nothing through Command Code's servers.
 
+## Driving the GUI app at a codespace (mod)
+
+`mods/codespace.ts` points a **local GUI or CLI session** at the codespace filesystem. The app
+keeps its own auth, session and UI; every file and shell operation is proxied into the codespace
+over `gh codespace ssh`:
+
+| Tool | Purpose |
+| --- | --- |
+| `cs_read` | Read a file (with line numbers) from the codespace |
+| `cs_write` | Create or overwrite a file there |
+| `cs_shell` | Run a shell command there |
+| `cs_glob` | Find files by glob pattern |
+| `cs_grep` | Search file contents |
+
+```bash
+# try it without installing
+cmdc --mod ./mods/codespace.ts
+
+# or install it for every session
+cp mods/codespace.ts ~/.commandcode/mods/
+```
+
+With exactly one codespace it auto-detects the target. With several, pin one:
+
+```json
+// .commandcode/codespace.json
+{ "codespace": "my-codespace-name" }
+```
+
+The mod also appends a system-prompt note naming the remote target, so the model does not reach
+for the local filesystem tools on a repo that is not on this machine.
+
+### Two hard-won implementation notes
+
+Both were found by testing against a real codespace, and both would fail silently otherwise:
+
+- **`cmd.exec` does not forward stdin.** A child process reading stdin receives zero bytes, so
+  payloads cannot be piped. Everything travels inside the command line.
+- **`cmd.exec` shell-quotes each argv element**, and `gh codespace ssh` re-parses the command on
+  the remote side. A script containing quotes survives neither round trip, which produced
+  `unexpected EOF while looking for matching '"'` on every call. The script is therefore
+  **base64-encoded and decoded remotely** — base64 is `[A-Za-z0-9+/=]`, so no quoting layer can
+  touch it, and the decoded script keeps its own quoting intact.
+
 ## What a codespace actually gives you
 
 Measured on a throwaway `basicLinux32gb` codespace (2 cores), not taken from docs:
