@@ -103,9 +103,9 @@ export async function findCodespace(reference, options = {}) {
   throw new CommandError(`No codespace matching "${reference}".`);
 }
 
-export async function startCodespace(name) {
-  return runChecked('gh', ['codespace', 'start', '-c', name]);
-}
+// There is deliberately no startCodespace: `gh codespace start` does not exist
+// (only `stop` does). A shutdown codespace is resumed by connecting to it, which
+// `gh codespace ssh` does implicitly - see ensureReady in codespace.mjs.
 
 export async function stopCodespace(name) {
   return runChecked('gh', ['codespace', 'stop', '-c', name]);

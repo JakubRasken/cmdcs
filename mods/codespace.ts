@@ -245,6 +245,54 @@ export default function (cmd) {
 		},
 	});
 
+	// Seeing and switching the target from inside a session matters: without it
+	// the only way to answer "what am I actually connected to?" is to guess.
+	cmd.addCommand({
+		name: 'codespace',
+		description: 'Show or switch the codespace this session works against',
+		argumentHint: '[name]',
+		handler: async ({ args }) => {
+			const wanted = (args ?? '').trim();
+
+			if (!wanted) {
+				const listed = await cmd.exec({
+					command: 'gh',
+					args: ['codespace', 'list', '--json', 'name,state,repository', '--limit', '30'],
+				});
+				if (listed.code !== 0) {
+					return { message: `Could not list codespaces. Run: gh auth refresh -h github.com -s codespace` };
+				}
+
+				let parsed = [];
+				try {
+					parsed = JSON.parse(listed.stdout || '[]');
+				} catch {
+					return { message: 'Could not parse `gh codespace list` output.' };
+				}
+				if (parsed.length === 0) return { message: 'No codespaces yet. Create one with: cmdcs create --repo owner/name' };
+
+				const active = configuredName() ?? (parsed.length === 1 ? parsed[0].name : null);
+				const rows = parsed.map(cs => {
+					const marker = cs.name === active ? '*' : ' ';
+					return `${marker} ${cs.name}  [${cs.state}]  ${cs.repository}`;
+				});
+
+				return {
+					message: [
+						active ? `Active codespace: ${active}` : 'No codespace pinned - several exist, pick one.',
+						'',
+						...rows,
+						'',
+						'Switch with /codespace <name>',
+					].join('\n'),
+				};
+			}
+
+			state.name = wanted;
+			return { message: `Codespace for this session set to ${wanted}.` };
+		},
+	});
+
 	// Naming the target in the prompt is what keeps the model from reaching for
 	// the local filesystem tools on a repo that is not on this machine.
 	cmd.hooks({

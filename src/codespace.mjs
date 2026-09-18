@@ -1,6 +1,6 @@
 import { CMDC_NAME, REMOTE_BOOTSTRAP } from './env.mjs';
 import { run, runInteractive } from './proc.mjs';
-import { isReady, startCodespace } from './gh.mjs';
+import { isReady, listCodespaces } from './gh.mjs';
 
 // Codespaces run bash, so the remote command boundary quotes for bash and only
 // passes it as a single argv element to `gh`.
@@ -19,27 +19,34 @@ export function buildRemoteCommand(command, { cwd, argv } = {}) {
   return parts.join('; ');
 }
 
-export async function ensureReady(codespace, { autoStart = true, onNotice = () => {} } = {}) {
+// A shutdown codespace is resumed by connecting to it - `gh codespace ssh`
+// brings it up and the next call succeeds. There is no `gh codespace start`
+// (only `stop` exists), so waiting is the whole job here.
+export async function ensureReady(codespace, { autoStart = true, onNotice = () => {}, probe } = {}) {
   if (isReady(codespace)) return codespace;
 
   if (!autoStart) {
-    throw new Error(`Codespace ${codespace.name} is ${codespace.state}. Start it with: gh codespace start -c ${codespace.name}`);
+    throw new Error(
+      `Codespace ${codespace.name} is ${codespace.state}. Resume it with: gh codespace ssh -c ${codespace.name}`,
+    );
   }
 
-  onNotice(`Starting codespace ${codespace.name} (was ${codespace.state})...`);
-  await startCodespace(codespace.name);
+  onNotice(`Resuming ${codespace.name} (was ${codespace.state}) - connecting brings it up...`);
 
-  let current = codespace;
-  for (let attempt = 0; attempt < 60; attempt += 1) {
-    if (isReady(current)) return current;
-    await new Promise(resolve => setTimeout(resolve, 5000));
-    const { listCodespaces } = await import('./gh.mjs');
+  // Connecting is what resumes it, so the probe is the wake-up call.
+  const connect = probe ?? (async () => run('gh', ['codespace', 'ssh', '-c', codespace.name, '--', 'echo ready']));
+  await connect();
+
+  for (let attempt = 0; attempt < 36; attempt += 1) {
+    if (isReady(codespace)) return codespace;
     const codespaces = await listCodespaces();
-    current = codespaces.find(cs => cs.name === codespace.name) ?? current;
-    onNotice(`Waiting for ${codespace.name}... (${current.state})`);
+    const current = codespaces.find(cs => cs.name === codespace.name);
+    if (current && isReady(current)) return current;
+    if (current) onNotice(`Waiting for ${codespace.name}... (${current.state})`);
+    await new Promise(resolve => setTimeout(resolve, 5000));
   }
 
-  throw new Error(`Codespace ${codespace.name} did not become available in time.`);
+  throw new Error(`Codespace ${codespace.name} did not become reachable in time.`);
 }
 
 export async function execRemote(codespace, command, { cwd, argv, input, timeout } = {}) {

@@ -175,6 +175,58 @@ and `~/.commandcode/providers.json` references it:
 so the file is safe in a dotfiles repo. Run with `--local-only` (`CMD_LOCAL_ONLY=1`) to send
 nothing through Command Code's servers.
 
+## The actual workflow
+
+Once set up, it is three steps and two of them are optional:
+
+```bash
+# 1. One code space per project, kept stopped between sessions
+cmdcs create --repo owner/name --idle 30m --retention 24h
+
+# 2. Point the app at it - the mod is already installed globally
+#    (copied to ~/.commandcode/mods/codespace.ts)
+```
+
+Then open the Command Code app and work normally. The agent reads, writes and runs commands
+inside the codespace.
+
+**You do not need to start the codespace first.** `gh codespace ssh` resumes a shutdown
+codespace implicitly, so the first tool call wakes it — verified: a `Shutdown` codespace went
+`Available` on connect with no explicit start step. (There is no `gh codespace start`; only
+`stop` exists.)
+
+Useful inside a session:
+
+```
+/codespace                 # what am I connected to, and what else exists
+/codespace my-other-cs     # switch target mid-session
+```
+
+### What the agent can and cannot do
+
+| | Local | Codespace |
+| --- | --- | --- |
+| `cs_read` `cs_write` `cs_shell` `cs_glob` `cs_grep` | | ✅ |
+| `read_file` `write_file` `edit_file` `grep` `glob` `shell_command` | ✅ | |
+
+The `cs_*` tools are remote; the unprefixed ones stay local. The mod appends a note to the
+system prompt naming the remote target, so the model picks correctly — but it means "editing
+the project" needs the `cs_*` tools, and a request phrased ambiguously can land on the local
+disk. Name the codespace when in doubt.
+
+### Cost discipline
+
+Only **running** time consumes core-hours. `basicLinux32gb` is 2 cores, so 180 core-hours is
+about 90 wall-clock hours per month. Stopping is free and instant:
+
+```bash
+cmdcs stop        # compute stops here; storage still counts
+cmdcs remove      # reclaim storage; the remote filesystem is gone
+```
+
+Idle timeout stops it automatically (30 min by default) and retention deletes it after
+shutdown (24 h), so a forgotten codespace cannot quietly burn a month of quota.
+
 ## Driving the GUI app at a codespace (mod)
 
 `mods/codespace.ts` points a **local GUI or CLI session** at the codespace filesystem. The app
