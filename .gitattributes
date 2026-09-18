@@ -1,0 +1,5 @@
+# Normalize line endings: the repo is developed on Windows and consumed on macOS/Linux.
+* text=auto eol=lf
+
+*.cmd text eol=crlf
+*.bat text eol=crlf
